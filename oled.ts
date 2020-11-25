@@ -21,10 +21,15 @@ interface OledOptions {
 
 interface Font {
   monospace: boolean
-  width: number
   height: number
-  fontData: number[]
-  lookup: string[]
+  fontData: {
+    [key: string]: FontData
+  }
+}
+
+interface FontData {
+  charBuffer: number[]
+  width: number
 }
 
 interface ScreenConfig {
@@ -350,34 +355,34 @@ export = class Oled {
 
       const stringArr = wordArr[i].split('')
       const slen = stringArr.length
-      const compare = (font.width * size * slen) + (size * (len - 1))
-
-      // wrap words if necessary
-      if (wrap && len > 1 && (offset >= (this.WIDTH - compare))) {
-        offset = 1
-        this.cursor_y += (font.height * size) + size + leading
-        this.setCursor(offset, this.cursor_y)
-      }
 
       // loop through the array of each char to draw
       for (let i = 0; i < slen; i += 1) {
-        // look up the position of the char, pull out the buffer slice
-        const charBuf = this._findCharBuf(font, stringArr[i])
+        const fontWidth = font.fontData[stringArr[i]].width;
+        const compare = (fontWidth * size * slen) + (size * (len - 1))
+
+        // wrap words if necessary
+        if (wrap && len > 1 && (offset >= (this.WIDTH - compare))) {
+          offset = 1
+          this.cursor_y += (font.height * size) + size + leading
+          this.setCursor(offset, this.cursor_y)
+        }
+
+        const charBuf = font.fontData[stringArr[i]].charBuffer;
         // read the bits in the bytes that make up the char
         const charBytes = this._readCharBytes(charBuf)
         // draw the entire charactei
-        this._drawChar(font, charBytes, size, color, false)
-        
+        this._drawChar(fontWidth, charBytes, size, color, false)
+
         // fills in background behind the text pixels so that it's easier to read the text
         this.fillRect(offset - padding, this.cursor_y, padding, (font.height * size), this._invertColor(color), false)
 
         // calc new x position for the next char, add a touch of padding too if it's a non space char
         padding = (stringArr[i] === ' ') ? 0 : size + letspace
-        offset += (font.width * size) + padding
-        
+        offset += (fontWidth * size) + padding
 
         // wrap letters if necessary
-        if (wrap && (offset >= (this.WIDTH - font.width - letspace))) {
+        if (wrap && (offset >= (this.WIDTH - fontWidth - letspace))) {
           offset = 1
           this.cursor_y += (font.height * size) + size + leading
         }
@@ -391,7 +396,7 @@ export = class Oled {
   }
 
   // draw an individual character to the screen
-  private _drawChar (font: Font, byteArray: number[][], size: number, color: Color, sync?: boolean): void {
+  private _drawChar (fontWidth: number, byteArray: number[][], size: number, color: Color, sync?: boolean): void {
     // take your positions...
     const x = this.cursor_x
     const y = this.cursor_y
@@ -400,7 +405,7 @@ export = class Oled {
     let pagePos = 0
     // loop through the byte array containing the hexes for the char
     for (let i = 0; i < byteArray.length; i += 1) {
-      pagePos = Math.floor(i / font.width) * 8
+      pagePos = Math.floor(i / fontWidth) * 8
       for (let j = 0; j < 8; j += 1) {
         // pull color out (invert the color if user chose black)
         const pixelState = (byteArray[i][j] === 1) ? color : this._invertColor(color);
@@ -418,7 +423,7 @@ export = class Oled {
           this.fillRect(xpos, ypos, size, size, pixelState, false)
         }
       }
-      c = (c < font.width - 1) ? c += 1 : 0
+      c = (c < fontWidth - 1) ? c += 1 : 0
     }
   }
 
@@ -443,15 +448,6 @@ export = class Oled {
     }
 
     return bitCharArr
-  }
-
-  // find where the character exists within the font object
-  private _findCharBuf (font: Font, c: string): number[] {
-    const charLength = Math.ceil((font.width * font.height) / 8)
-    // use the lookup array as a ref to find where the current char bytes start
-    const cBufPos = font.lookup.indexOf(c) * charLength
-    // slice just the current char's bytes out of the fontData array and return
-    return font.fontData.slice(cBufPos, cBufPos + charLength)
   }
 
   // send the entire framebuffer to the oled
