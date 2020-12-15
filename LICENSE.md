@@ -1,5 +1,6 @@
 The MIT License (MIT)
 
+Copyright (c) 2020 Gary Sentosa
 Copyright (c) 2016 Suz Hinton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
